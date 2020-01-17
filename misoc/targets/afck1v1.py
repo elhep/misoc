@@ -117,7 +117,7 @@ class BaseSoC(SoCSDRAM):
 
             self.register_rom(self.spiflash.bus, 16 * 1024 * 1024)
             self.csr_devices.append("spiflash")
-            self.flash_boot_address = 0x580000
+            self.flash_boot_address = 0x880000
 
 # EthernetSoC ------------------------------------------------------------------------------------------
 
