@@ -49,13 +49,13 @@ class Register(Module):
         self.pdo = Signal(width)
         # Parallel data out (from serial)
         self.pdi = Signal(width)
-        self.pdi1 = Signal(width)
+        # self.pdi1 = Signal(width)
         # Serial data out (from parallel)
         self.sdo = Signal(reset_less=True)
         # Serial data in
         # Must be sampled at a higher layer at self.sample
         self.sdi = Signal()
-        self.sdi1 = Signal()
+        # self.sdi1 = Signal()
         # Transmit LSB first
         self.lsb_first = Signal()
         # Load shift register from pdo
@@ -68,21 +68,21 @@ class Register(Module):
         ###
 
         sr = Signal(width, reset_less=True)
-        sr1 = Signal(width, reset_less=True)
+        # sr1 = Signal(width, reset_less=True)
 
         self.comb += [
             self.pdi.eq(Mux(self.lsb_first,
                 Cat(sr[1:], self.sdi),
                 Cat(self.sdi, sr[:-1]))),
-            self.pdi1.eq(Mux(self.lsb_first,
-                Cat(sr1[1:], self.sdi1),
-                Cat(self.sdi1, sr1[:-1])))
+            # self.pdi1.eq(Mux(self.lsb_first,
+            #     Cat(sr1[1:], self.sdi1),
+            #     Cat(self.sdi1, sr1[:-1])))
         ]
         self.sync += [
             If(self.shift,
                 sr.eq(self.pdi),
                 self.sdo.eq(Mux(self.lsb_first, self.pdi[0], self.pdi[-1])),
-                sr1.eq(self.pdi1),
+                # sr1.eq(self.pdi1),
             ),
             If(self.load,
                 sr.eq(self.pdo),
@@ -90,8 +90,85 @@ class Register(Module):
             )
         ]
 
+class MulitInRegister(Module):
+    def __init__(self, width, rtlink_no = None):
+        # Parallel data out (to serial)
+        self.pdo = Signal(width)
+        # Parallel data out (from serial)
+        if rtlink_no is None:
+            self.pdi = Signal(width)
+        else:
+            for n in range(rtlink_no):
+                pdi = Signal(width)
+                setattr(self, "pdi_{}".format(n), pdi)
+
+        # Serial data out (from parallel)
+        self.sdo = Signal(reset_less=True)
+        # Serial data in
+        # Must be sampled at a higher layer at self.sample
+        if rtlink_no is None:
+            self.sdi = Signal(width)
+        else:
+            for n in range(rtlink_no):
+                sdi = Signal()
+                setattr(self, "sdi_{}".format(n), sdi)
+            
+        # Transmit LSB first
+        self.lsb_first = Signal()
+        # Load shift register from pdo
+        self.load = Signal()
+        # Shift SR
+        self.shift = Signal()
+        # Not used here. Use in Interface to sample into sdo.
+        self.sample = Signal()
+
+        ###
+
+        if rtlink_no is None:
+            sr = Signal(width, reset_less=True)
+        else:
+            sr = [Signal(width, reset_less=True) for n in range (rtlink_no)]
+
+        if rtlink_no is None:
+            self.comb += [
+                self.pdi.eq(Mux(self.lsb_first,
+                    Cat(sr[1:], self.sdi),
+                    Cat(self.sdi, sr[:-1]))),
+                # self.pdi1.eq(Mux(self.lsb_first,
+                #     Cat(sr1[1:], self.sdi1),
+                #     Cat(self.sdi1, sr1[:-1])))
+            ]
+            self.sync += [
+                If(self.shift,
+                    sr.eq(self.pdi),
+                    self.sdo.eq(Mux(self.lsb_first, self.pdi[0], self.pdi[-1])),
+                    # sr1.eq(self.pdi1),
+                ),
+                If(self.load,
+                    sr.eq(self.pdo),
+                    self.sdo.eq(Mux(self.lsb_first, self.pdo[0], self.pdo[-1]))
+                )
+            ]
+        else:
+            for n in range (rtlink_no):
+                self.comb += [
+                    getattr(self, "pdi_{}".format(n)).eq(Mux(self.lsb_first,
+                        Cat(sr[n][1:], getattr(self, "sdi_{}".format(n))),
+                        Cat(getattr(self, "sdi_{}".format(n)), sr[n][:-1])))
+                ]
+                self.sync += [
+                    If(self.shift,
+                        sr[n].eq(getattr(self, "pdi_{}".format(n))),
+                        self.sdo.eq(Mux(self.lsb_first, getattr(self, "pdi_{}".format(n))[0], getattr(self, "pdi_{}".format(n))[-1]))
+                    ),
+                    If(self.load,
+                        sr[n].eq(self.pdo),
+                        self.sdo.eq(Mux(self.lsb_first, self.pdo[0], self.pdo[-1]))
+                    )
+                ]
+
 class SPIMachine(Module):
-    def __init__(self, data_width=32, div_width=8):
+    def __init__(self, data_width=32, div_width=8, rtlink_no=None):
         # Number of bits to transfer - 1
         self.length = Signal(max=data_width)
         # Freescale CPHA
@@ -118,7 +195,11 @@ class SPIMachine(Module):
         # this transfer.
         self.end = Signal()
 
-        self.submodules.reg = reg = Register(data_width)
+        if rtlink_no is None:
+            self.submodules.reg = reg = MulitInRegister(data_width)
+        else:
+            self.submodules.reg = reg = MulitInRegister(data_width, rtlink_no=rtlink_no)
+
         self.submodules.cg = cg = ClockGen(div_width)
 
         ###
