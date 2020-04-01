@@ -418,7 +418,7 @@ class SPIInterfaceXC7Diff(Module):
                 io_IO=pads.miso, io_IOB=pads_n.miso)
 
 class SPIInterPhaser(Module):
-    def __init__(self, pads, pads_n):
+    def __init__(self, pads, pads_n, rtlink_no):
         self.cs = Signal(len(getattr(pads, "cs_n", [0])))
         self.cs_polarity = Signal.like(self.cs)
         self.clk_next = Signal()
@@ -428,26 +428,25 @@ class SPIInterPhaser(Module):
         self.sample = Signal()
         self.offline = Signal()
         self.half_duplex = Signal()
-        self.sdi = Signal()
         self.sdo = Signal()
 
-        self.sdi1 = Signal()
+        for n in range(rtlink_no):
+            sdi = Signal()
+            setattr(self, "sdi_{}".format(n), sdi)
+        
+        miso_lines = [Signal() for i in range(rtlink_no)]
+        miso_regs = [Signal() for i in range(rtlink_no)]
 
         cs = Signal.like(self.cs)
         cs.reset = C((1 << len(self.cs)) - 1)
         clk = Signal()
-        miso = Signal()
-        miso1 = Signal()
         mosi = Signal()
-        miso_reg = Signal(reset_less=True)
-        miso_reg1 = Signal(reset_less = True)        
         mosi_reg = Signal(reset_less=True)
 
-        self.comb += [
-                self.sdi.eq(Mux(self.half_duplex, mosi_reg, miso_reg)),
-                self.sdi1.eq(Mux(self.half_duplex, mosi_reg, miso_reg1))
-
-        ]
+        for n in range (rtlink_no):
+            self.comb += [
+                    getattr(self, "sdi_{}".format(n)).eq(Mux(self.half_duplex, mosi_reg, miso_regs[n])),
+            ]
         self.sync += [
                 If(self.ce,
                     cs.eq((Replicate(self.cs_next, len(self.cs))
@@ -455,8 +454,7 @@ class SPIInterPhaser(Module):
                     clk.eq(self.clk_next ^ self.clk_polarity)
                 ),
                 If(self.sample,
-                    miso_reg.eq(miso),
-                    miso_reg1.eq(miso1),
+                    [miso_regs[n].eq(miso_lines[n]) for n in range (rtlink_no)],
                     mosi_reg.eq(mosi)
                 )
         ]
@@ -477,15 +475,13 @@ class SPIInterPhaser(Module):
         #     self.specials += Instance("IOBUFDS",
         #         o_O=miso, i_I=self.sdo, i_T=1,
         #         io_IO=pads.miso, io_IOB=pads_n.miso)
-        if hasattr(pads, "sdoa"):
-            self.specials += Instance("IOBUFDS",
-                o_O=miso, i_I=self.sdo, i_T=1,
-                io_IO=pads.sdoa, io_IOB=pads_n.sdoa)
-        if hasattr(pads, "sdob"):
-            self.specials += Instance("IOBUFDS",
-                o_O=miso1, i_I=self.sdo, i_T=1,
-                io_IO=pads.sdob, io_IOB=pads_n.sdob)
-                
+        for idx, letter in  enumerate ("abcd"):
+            if hasattr(pads, "sdo{}".format(letter)):
+                sdo_p = getattr(pads, "sdo{}".format(letter))
+                sdo_n = getattr(pads_n, "sdo{}".format(letter))
+                self.specials += Instance("IOBUFDS",
+                    o_O=miso_lines[idx], i_I=self.sdo, i_T=1,
+                    io_IO=sdo_p, io_IOB=sdo_n)
 
 class SPIInterfaceiCE40Diff(Module):
     """
