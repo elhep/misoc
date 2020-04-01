@@ -49,11 +49,13 @@ class Register(Module):
         self.pdo = Signal(width)
         # Parallel data out (from serial)
         self.pdi = Signal(width)
+        self.pdi1 = Signal(width)
         # Serial data out (from parallel)
         self.sdo = Signal(reset_less=True)
         # Serial data in
         # Must be sampled at a higher layer at self.sample
         self.sdi = Signal()
+        self.sdi1 = Signal()
         # Transmit LSB first
         self.lsb_first = Signal()
         # Load shift register from pdo
@@ -66,23 +68,27 @@ class Register(Module):
         ###
 
         sr = Signal(width, reset_less=True)
+        sr1 = Signal(width, reset_less=True)
 
         self.comb += [
             self.pdi.eq(Mux(self.lsb_first,
                 Cat(sr[1:], self.sdi),
-                Cat(self.sdi, sr[:-1])))
+                Cat(self.sdi, sr[:-1]))),
+            self.pdi1.eq(Mux(self.lsb_first,
+                Cat(sr1[1:], self.sdi1),
+                Cat(self.sdi1, sr1[:-1])))
         ]
         self.sync += [
             If(self.shift,
                 sr.eq(self.pdi),
-                self.sdo.eq(Mux(self.lsb_first, self.pdi[0], self.pdi[-1]))
+                self.sdo.eq(Mux(self.lsb_first, self.pdi[0], self.pdi[-1])),
+                sr1.eq(self.pdi1),
             ),
             If(self.load,
                 sr.eq(self.pdo),
                 self.sdo.eq(Mux(self.lsb_first, self.pdo[0], self.pdo[-1]))
             )
         ]
-
 
 class SPIMachine(Module):
     def __init__(self, data_width=32, div_width=8):
@@ -330,6 +336,75 @@ class SPIInterfaceXC7Diff(Module):
                 o_O=miso, i_I=self.sdo, i_T=1,
                 io_IO=pads.miso, io_IOB=pads_n.miso)
 
+class SPIInterPhaser(Module):
+    def __init__(self, pads, pads_n):
+        self.cs = Signal(len(getattr(pads, "cs_n", [0])))
+        self.cs_polarity = Signal.like(self.cs)
+        self.clk_next = Signal()
+        self.clk_polarity = Signal()
+        self.cs_next = Signal()
+        self.ce = Signal()
+        self.sample = Signal()
+        self.offline = Signal()
+        self.half_duplex = Signal()
+        self.sdi = Signal()
+        self.sdo = Signal()
+
+        self.sdi1 = Signal()
+
+        cs = Signal.like(self.cs)
+        cs.reset = C((1 << len(self.cs)) - 1)
+        clk = Signal()
+        miso = Signal()
+        miso1 = Signal()
+        mosi = Signal()
+        miso_reg = Signal(reset_less=True)
+        miso_reg1 = Signal(reset_less = True)        
+        mosi_reg = Signal(reset_less=True)
+
+        self.comb += [
+                self.sdi.eq(Mux(self.half_duplex, mosi_reg, miso_reg)),
+                self.sdi1.eq(Mux(self.half_duplex, mosi_reg, miso_reg1))
+
+        ]
+        self.sync += [
+                If(self.ce,
+                    cs.eq((Replicate(self.cs_next, len(self.cs))
+                        & self.cs) ^ ~self.cs_polarity),
+                    clk.eq(self.clk_next ^ self.clk_polarity)
+                ),
+                If(self.sample,
+                    miso_reg.eq(miso),
+                    miso_reg1.eq(miso1),
+                    mosi_reg.eq(mosi)
+                )
+        ]
+
+        if hasattr(pads, "cs_n"):
+            for i in range(len(pads.cs_n)):
+                self.specials += Instance("OBUFTDS",
+                    i_I=cs[i], i_T=self.offline,
+                    o_O=pads.cs_n[i], o_OB=pads_n.cs_n[i])
+        self.specials += Instance("OBUFTDS",
+            i_I=clk, i_T=self.offline,
+            o_O=pads.clk, o_OB=pads_n.clk)
+        if hasattr(pads, "mosi"):
+            self.specials += Instance("IOBUFDS",
+                o_O=mosi, i_I=self.sdo, i_T=self.offline | self.half_duplex,
+                io_IO=pads.mosi, io_IOB=pads_n.mosi)
+        # if hasattr(pads, "miso"):
+        #     self.specials += Instance("IOBUFDS",
+        #         o_O=miso, i_I=self.sdo, i_T=1,
+        #         io_IO=pads.miso, io_IOB=pads_n.miso)
+        if hasattr(pads, "sdoa"):
+            self.specials += Instance("IOBUFDS",
+                o_O=miso, i_I=self.sdo, i_T=1,
+                io_IO=pads.sdoa, io_IOB=pads_n.sdoa)
+        if hasattr(pads, "sdob"):
+            self.specials += Instance("IOBUFDS",
+                o_O=miso1, i_I=self.sdo, i_T=1,
+                io_IO=pads.sdob, io_IOB=pads_n.sdob)
+                
 
 class SPIInterfaceiCE40Diff(Module):
     """
