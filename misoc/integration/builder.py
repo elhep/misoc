@@ -159,8 +159,8 @@ class Builder:
 
     def initialize_memory(self):
         if self.soc.integrated_rom_size:
-            bios_file = os.path.join(self.output_dir, "software", "bios",
-                                     "bios.bin")
+            bios_file = os.path.join(self.output_dir, "software", "bootloader",
+                                     "bootloader.bin")
             with open(bios_file, "rb") as boot_file:
                 boot_data = []
                 unpack_endian = ">I" if self.soc.cpu_type != "vexriscv" else "<I"
