@@ -85,7 +85,7 @@ class _CRG(Module):
 
 class BaseSoC(SoCSDRAM):
 
-    def __init__(self, sdram_controller_type="minicon", crg=None, **kwargs):
+    def __init__(self, sdram_controller_type="minicon", crg=None, spi_flash_type="1x", **kwargs):
         platform = afck1v1.Platform()
 
         SoCSDRAM.__init__(self, platform, 
@@ -104,14 +104,17 @@ class BaseSoC(SoCSDRAM):
                             sdram_module.geom_settings,
                             sdram_module.timing_settings)
         self.csr_devices += ["ddrphy"]
-
+        self.flash_boot_address = 0x880000
         if not self.integrated_rom_size:
-            spiflash_pads = platform.request("spiflash1x")
+            spiflash_pads = platform.request("spiflash{}".format(spi_flash_type))
             spiflash_pads.clk = Signal()
             self.specials += Instance("STARTUPE2",
                                   i_CLK=0, i_GSR=0, i_GTS=0, i_KEYCLEARB=0, i_PACK=0,
                                   i_USRCCLKO=spiflash_pads.clk, i_USRCCLKTS=0, i_USRDONEO=1, i_USRDONETS=1)
-            self.submodules.spiflash = spi_flash.SpiFlashSingle(spiflash_pads, dummy=8, div=7)
+            if spi_flash_type == "1x":
+                self.submodules.spiflash = spi_flash.SpiFlashSingle(spiflash_pads, dummy=8, div=8)
+            else:                
+                self.submodules.spiflash = spi_flash.SpiFlash(spiflash_pads, dummy=4, div=4)
             self.config["SPIFLASH_PAGE_SIZE"] = 256
             self.config["SPIFLASH_SECTOR_SIZE"] = 0x40000
 
@@ -163,8 +166,8 @@ class MiniSoC(BaseSoC):
 
 def soc_afck1v1_args(parser):
     soc_sdram_args(parser)
-    parser.add_argument("--with-spi-flash", action="store_false",
-                        help="enable SPI Flash support ")
+    parser.add_argument("--spi-flash-type", action="store", dest="flash_type", default="1x", type=str,
+                        choices=["1x", "2x", "4x"], help="SPI Flash type (1x, 2x, 4x)")
 
 
 def soc_afck1v1_argdict(args):
