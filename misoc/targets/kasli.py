@@ -8,7 +8,7 @@ from migen.build.platforms.sinara import kasli
 
 from misoc.cores.sdram_settings import MT41K256M16
 from misoc.cores.sdram_phy import a7ddrphy
-from misoc.cores import spi_flash
+from misoc.cores import virtual_leds, spi_flash
 from misoc.cores.a7_gtp import *
 from misoc.cores.liteeth_mini.phy.a7_1000basex import A7_1000BASEX
 from misoc.cores.liteeth_mini.mac import LiteEthMAC
@@ -122,6 +122,8 @@ class BaseSoC(SoCSDRAM):
                           clk_freq=125e6*14.5/16, cpu_reset_address=0x400000,
                           **kwargs)
 
+        self.config["HW_REV"] = hw_rev
+
         self.submodules.crg = _CRG(platform)
         self.platform.add_period_constraint(self.crg.cd_sys.clk, 1e9/self.clk_freq)
 
@@ -130,6 +132,10 @@ class BaseSoC(SoCSDRAM):
         self.register_sdram(self.ddrphy, sdram_controller_type,
                             sdram_module.geom_settings, sdram_module.timing_settings)
         self.csr_devices.append("ddrphy")
+
+        if hw_rev == "v2.0":
+            self.submodules.virtual_leds = virtual_leds.VirtualLeds()
+            self.csr_devices.append("virtual_leds")
 
         if not self.integrated_rom_size:
             spiflash_pads = platform.request("spiflash2x")
@@ -166,17 +172,20 @@ class MiniSoC(BaseSoC):
             self.crg.cd_sys.clk,
             self.ethphy.txoutclk, self.ethphy.rxoutclk)
 
-        sfp_ctl = self.platform.request("sfp_ctl", 0)
-        if hasattr(sfp_ctl, "mod_present"):
-            mod_present = sfp_ctl.mod_present
-        else:
-            mod_present = ~sfp_ctl.mod_present_n
-        self.comb += [
-            sfp_ctl.rate_select.eq(0),
-            sfp_ctl.tx_disable.eq(0),
-            sfp_ctl.led.eq(~sfp_ctl.los & ~sfp_ctl.tx_fault & mod_present &
-                self.ethphy.link_up),
-        ]
+        if self.platform.hw_rev in ("v1.0", "v1.1"):
+            sfp_ctl = self.platform.request("sfp_ctl", 0)
+            if hasattr(sfp_ctl, "mod_present"):
+                mod_present = sfp_ctl.mod_present
+            else:
+                mod_present = ~sfp_ctl.mod_present_n
+            self.comb += [
+                sfp_ctl.rate_select.eq(0),
+                sfp_ctl.tx_disable.eq(0),
+                sfp_ctl.led.eq(~sfp_ctl.los & ~sfp_ctl.tx_fault & mod_present &
+                    self.ethphy.link_up),
+            ]
+        if self.platform.hw_rev == "v2.0":
+            self.comb += self.virtual_leds.get(0).eq(self.ethphy.link_up)
 
         self.submodules.ethmac = LiteEthMAC(
                 phy=self.ethphy, dw=32, interface="wishbone",
@@ -200,7 +209,7 @@ class MiniSoC(BaseSoC):
 def soc_kasli_args(parser):
     soc_sdram_args(parser)
     parser.add_argument("--hw-rev", default=None,
-                        help="Kasli hardware revision: v1.0/v1.1 "
+                        help="Kasli hardware revision: v1.0/v1.1/v2.0 "
                              "(default: variant-dependent)")
 
 

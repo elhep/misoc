@@ -16,6 +16,10 @@ def get_cpu_mak(cpu):
         triple = "riscv64-unknown-elf"
         cpuflags = "-D__vexriscv__ -march=rv32im  -mabi=ilp32"
         clang = ""
+    elif cpu == "zynq7000":
+        triple = "armv7-unknown-linux-gnueabihf"
+        cpuflags = "-mfloat-abi=hard"
+        clang = "1"
     else:
         raise ValueError("Unsupported CPU type: "+cpu)
     return [
@@ -52,9 +56,7 @@ def get_mem_header(regions, flash_boot_address):
 
 
 def get_mem_rust(regions, groups, flash_boot_address):
-    r  = "// Include this file as:\n"
-    r += "//     include!(concat!(env!(\"BUILDINC_DIRECTORY\"), \"/generated/mem.rs\"));\n"
-    r += "#[allow(dead_code)]\n"
+    r = "#[allow(dead_code)]\n"
     r += "pub mod mem {\n"
     for name, base, size in regions:
         r += "  pub const {name}_BASE: usize = 0x{base:08x};\n". \
@@ -222,9 +224,7 @@ def _region_by_name(regions, search_name):
 
 
 def get_csr_rust(regions, groups, constants):
-    r  = "// Include this file as:\n"
-    r += "//     include!(concat!(env!(\"BUILDINC_DIRECTORY\"), \"/generated/csr.rs\"));\n"
-    r += "#[allow(dead_code)]\n"
+    r = "#[allow(dead_code)]\n"
     r += "pub mod csr {\n"
 
     for name, origin, busword, obj in regions:
