@@ -91,7 +91,7 @@ class BaseSoC(SoCSDRAM, AutoCSR):
     }
     mem_map.update(SoCSDRAM.mem_map)
 
-    def __init__(self, sdram_controller_type="minicon", with_spiflash=False, **kwargs):
+    def __init__(self, sdram_controller_type="minicon", with_spiflash=False, crg=None, **kwargs):
         platform = afc3v1.Platform()
 
         SoCSDRAM.__init__(self, platform,
@@ -179,7 +179,6 @@ def soc_afc3v1_args(parser):
 
 def soc_afc3v1_argdict(args):
     r = soc_sdram_argdict(args)
-    r["with_spiflash"] = args.with_spi_flash
     return r
 
 
