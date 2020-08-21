@@ -98,8 +98,11 @@ class BaseSoC(SoCSDRAM, AutoCSR):
                           clk_freq=125000000,
                           **kwargs)
 
-        self.submodules.crg = _CRG(platform)
-        self.platform.add_period_constraint(self.crg.cd_sys.clk, 8.)
+        if crg is None:
+            self.submodules.crg = _CRG(platform)
+        else:
+            self.submodules.crg = crg(platform)
+
 
         self.submodules.ddrphy = a7ddrphy.A7DDRPHY(platform.request("ddram"))
         sdram_module = MT41J512M8(self.clk_freq, "1:4")
