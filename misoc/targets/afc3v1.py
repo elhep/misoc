@@ -91,15 +91,18 @@ class BaseSoC(SoCSDRAM, AutoCSR):
     }
     mem_map.update(SoCSDRAM.mem_map)
 
-    def __init__(self, sdram_controller_type="minicon", with_spiflash=False, **kwargs):
+    def __init__(self, sdram_controller_type="minicon", with_spiflash=False, crg=None, **kwargs):
         platform = afc3v1.Platform()
 
         SoCSDRAM.__init__(self, platform,
                           clk_freq=125000000,
                           **kwargs)
 
-        self.submodules.crg = _CRG(platform)
-        self.platform.add_period_constraint(self.crg.cd_sys.clk, 8.)
+        if crg is None:
+            self.submodules.crg = _CRG(platform)
+        else:
+            self.submodules.crg = crg(platform)
+
 
         self.submodules.ddrphy = a7ddrphy.A7DDRPHY(platform.request("ddram"))
         sdram_module = MT41J512M8(self.clk_freq, "1:4")
@@ -179,7 +182,6 @@ def soc_afc3v1_args(parser):
 
 def soc_afc3v1_argdict(args):
     r = soc_sdram_argdict(args)
-    r["with_spiflash"] = args.with_spi_flash
     return r
 
 
