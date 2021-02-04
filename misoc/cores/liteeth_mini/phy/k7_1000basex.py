@@ -6,8 +6,10 @@ from migen.genlib.resetsync import AsyncResetSynchronizer
 from migen.genlib.cdc import PulseSynchronizer
 
 from liteiclink.transceiver.gtx_7series_init import GTXTXInit, GTXRXInit
-
+from microscope import *
 from misoc.cores.liteeth_mini.phy.pcs_1000basex import *
+
+from gateware.debug import XilinxProbeAsync
 
 
 class GTXChannelPLL(Module):
@@ -119,7 +121,7 @@ class K7_1000BASEX(Module):
             # RX Byte and Word Alignment Attributes
             p_ALIGN_COMMA_DOUBLE                     ="FALSE",
             p_ALIGN_COMMA_ENABLE                     =0b1111111111,
-            p_ALIGN_COMMA_WORD                       =2,
+            p_ALIGN_COMMA_WORD                       =1,
             p_ALIGN_MCOMMA_DET                       ="TRUE",
             p_ALIGN_MCOMMA_VALUE                     =0b1010000011,
             p_ALIGN_PCOMMA_DET                       ="TRUE",
@@ -130,13 +132,13 @@ class K7_1000BASEX(Module):
             p_RX_SIG_VALID_DLY                       =10,
 
             # RX 8B/10B Decoder Attributes
-            p_RX_DISPERR_SEQ_MATCH                   ="TRUE",
-            p_DEC_MCOMMA_DETECT                      ="TRUE",
-            p_DEC_PCOMMA_DETECT                      ="TRUE",
-            p_DEC_VALID_COMMA_ONLY                   ="TRUE",
+            p_RX_DISPERR_SEQ_MATCH                   ="FALSE",
+            p_DEC_MCOMMA_DETECT                      ="FALSE",
+            p_DEC_PCOMMA_DETECT                      ="FALSE",
+            p_DEC_VALID_COMMA_ONLY                   ="FALSE",
 
             # RX Clock Correction Attributes
-            p_CBCC_DATA_SOURCE_SEL                   ="DECODED",
+            p_CBCC_DATA_SOURCE_SEL                   ="ENCODED",
             p_CLK_COR_SEQ_2_USE                      ="FALSE",
             p_CLK_COR_KEEP_IDLE                      ="FALSE",
             p_CLK_COR_MAX_LAT                        =9,
@@ -802,6 +804,15 @@ class K7_1000BASEX(Module):
             AsyncResetSynchronizer(self.cd_eth_rx, ~self.rx_mmcm_locked)
         ]
 
+        self.submodules += [
+            XilinxProbeAsync(pll.lock, "ethphy_pll_lock"),
+            XilinxProbeAsync(self.tx_reset_done, "ethphy_tx_reset_done"),
+            XilinxProbeAsync(self.rx_reset_done, "ethphy_rx_reset_done"),
+            XilinxProbeAsync(self.tx_mmcm_locked, "ethphy_tx_mmcm_locked"),
+            XilinxProbeAsync(self.rx_mmcm_locked, "ethphy_rx_mmcm_locked"),
+            XilinxProbeAsync(pcs.link_up, "ethphy_link_up"),
+        ]
+
         # Transceiver init
         tx_init = GTXTXInit(sys_clk_freq, buffer_enable=True)
         self.comb += [
@@ -847,7 +858,7 @@ class K7_1000BASEX(Module):
 
         # Gearbox and PCS connection
         gearbox = Gearbox()
-        self.submodules += gearbox
+        self.submodules.gearbox = gearbox
 
         self.comb += [
             tx_data.eq(gearbox.tx_data_half),

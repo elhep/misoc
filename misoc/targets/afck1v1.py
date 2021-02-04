@@ -133,36 +133,27 @@ class MiniSoC(BaseSoC):
     def __init__(self, ethmac_nrxslots=2, ethmac_ntxslots=2, **kwargs):
         BaseSoC.__init__(self, **kwargs)
 
+        self.csr_devices += ["ethphy", "ethmac"]
+        self.interrupt_devices.append("ethmac")
+
         self.submodules.ethphy = K7_1000BASEX(self.platform.request("mgt116_clk1"), self.platform.request("mgt116", 3), 125e6)
-        self.platform.add_period_constraint(self.platform.lookup_request("mgt116_clk1"), 1e9 / 125e6)
-        self.csr_devices += ["ethphy"]
+        self.platform.add_period_constraint(self.ethphy.txoutclk, 16.)
+        self.platform.add_period_constraint(self.ethphy.rxoutclk, 16.)
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.ethphy.txoutclk, self.ethphy.rxoutclk)
+        
+        led_g_pad = self.platform.request("led", 1)
+        self.comb += [led_g_pad.eq(self.ethphy.link_up)]
         
         self.submodules.ethmac = LiteEthMAC(
-            phy=self.ethphy, 
-            dw=32,
-            interface="wishbone",
-            nrxslots=2, 
-            ntxslots=2)
+            phy=self.ethphy, dw=32, interface="wishbone",
+            nrxslots=ethmac_nrxslots, ntxslots=ethmac_nrxslots)
         ethmac_len = (ethmac_nrxslots + ethmac_ntxslots) * 0x800
         self.add_wb_slave(self.mem_map["ethmac"], ethmac_len, self.ethmac.bus)
         self.add_memory_region("ethmac",
                 self.mem_map["ethmac"] | self.shadow_base, ethmac_len)
-        self.csr_devices += ["ethmac"]
-        self.interrupt_devices.append("ethmac")
-
-        self.ethphy.cd_eth_rx.clk.attr.add("keep")
-        self.ethphy.cd_eth_tx.clk.attr.add("keep")
-        self.ethphy.txoutclk.attr.add("keep")
-        self.ethphy.rxoutclk.attr.add("keep")
-        self.platform.add_period_constraint(self.ethphy.cd_eth_rx.clk, 1e9 / 125e6)
-        self.platform.add_period_constraint(self.ethphy.cd_eth_tx.clk, 1e9 / 125e6)
-        self.platform.add_period_constraint(self.ethphy.txoutclk, 1e9 / 125e6 * 2)
-        self.platform.add_period_constraint(self.ethphy.rxoutclk, 1e9 / 125e6 * 2)
-        self.platform.add_false_path_constraints(
-            self.crg.cd_sys.clk,
-            self.ethphy.cd_eth_rx.clk,
-            self.ethphy.cd_eth_tx.clk)
-
+        
 
 def soc_afck1v1_args(parser):
     soc_sdram_args(parser)
