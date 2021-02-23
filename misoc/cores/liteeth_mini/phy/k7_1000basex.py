@@ -378,13 +378,14 @@ class K7_1000BASEX(Module):
 
             # CPLL Attributes
             p_CPLL_CFG                               = 0xBC07DC,
-            p_CPLL_FBDIV                             = 4,#pll.config["n2"],
+            # FIXME: It seems that with values swapped ETH PHY works more often...
+            p_CPLL_FBDIV                             = 4, #pll.config["n2"],
             p_CPLL_FBDIV_45                          = 5, #pll.config["n1"],
             p_CPLL_INIT_CFG                          = 0x00001E,
             p_CPLL_LOCK_CFG                          = 0x01E8,
-            p_CPLL_REFCLK_DIV                        = 1, #pll.config["m"],
-            p_RXOUT_DIV                              = 4, #pll.config["d"],
-            p_TXOUT_DIV                              = 4, #pll.config["d"],
+            p_CPLL_REFCLK_DIV                        = pll.config["m"],
+            p_RXOUT_DIV                              = pll.config["d"],
+            p_TXOUT_DIV                              = pll.config["d"],
             p_SATA_CPLL_CFG                          = "VCO_3000MHZ",
 
             # RX Initialization and Reset Attributes
