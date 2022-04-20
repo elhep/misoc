@@ -188,7 +188,7 @@ class Builder:
                     boot_data.append(struct.unpack(unpack_endian + unpack_type, w)[0])
             self.soc.rom.mem.init = boot_data
 
-    def build(self):
+    def build(self, **kwargs):
         self.soc.finalize()
 
         if self.soc.integrated_rom_size and not self.compile_software:
@@ -199,7 +199,7 @@ class Builder:
         self.generate_software()
         self.initialize_memory()
         self.soc.build(build_dir=os.path.join(self.output_dir, "gateware"),
-                       run=self.compile_gateware)
+                       run=self.compile_gateware, **kwargs)
 
 
 def builder_args(parser):
