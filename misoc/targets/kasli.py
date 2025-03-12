@@ -445,14 +445,14 @@ class MiniSoC(BaseSoC):
     }
     mem_map.update(BaseSoC.mem_map)
 
-    def __init__(self, *args, ethmac_nrxslots=2, ethmac_ntxslots=2, **kwargs):
+    def __init__(self, *args, ethmac_nrxslots=2, ethmac_ntxslots=2, eth_sfp=0, **kwargs):
         BaseSoC.__init__(self, *args, **kwargs)
         self.create_qpll()
 
         self.csr_devices += ["ethphy", "ethmac"]
         self.interrupt_devices.append("ethmac")
 
-        sfp = self.platform.request("sfp", 0)
+        sfp = self.platform.request("sfp", eth_sfp)
         self.submodules.ethphy = A7_1000BASEX(self.ethphy_qpll_channel, sfp, self.clk_freq)
         self.platform.add_period_constraint(self.ethphy.txoutclk, 16.)
         self.platform.add_period_constraint(self.ethphy.rxoutclk, 16.)
@@ -461,7 +461,7 @@ class MiniSoC(BaseSoC):
             self.ethphy.txoutclk, self.ethphy.rxoutclk)
 
         if self.platform.hw_rev in ("v1.0", "v1.1"):
-            sfp_ctl = self.platform.request("sfp_ctl", 0)
+            sfp_ctl = self.platform.request("sfp_ctl", eth_sfp)
             if hasattr(sfp_ctl, "mod_present"):
                 mod_present = sfp_ctl.mod_present
             else:
